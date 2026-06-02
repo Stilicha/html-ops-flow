@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arento — Operations Flow Charts</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f5f7fa; color: #1a1a2e; line-height: 1.6; }
+        header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 40px 0; text-align: center; }
+        header h1 { font-size: 2.2em; font-weight: 700; }
+        header p { font-size: 1.1em; opacity: 0.8; margin-top: 8px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .section { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin: 24px 0; padding: 32px; }
+        .section h2 { font-size: 1.5em; color: #1a1a2e; margin-bottom: 8px; border-left: 4px solid #e94560; padding-left: 16px; }
+        .section p.desc { color: #666; margin-bottom: 20px; padding-left: 20px; }
+        .section .note { background: #fff8e1; border-left: 3px solid #ffc107; padding: 10px 14px; margin: 16px 0; font-size: 0.9em; border-radius: 0 6px 6px 0; }
+        .mermaid { display: flex; justify-content: center; overflow-x: auto; padding: 10px 0; }
+        nav { background: white; border-bottom: 1px solid #e0e0e0; padding: 12px 0; position: sticky; top: 0; z-index: 100; }
+        nav .container { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px; }
+        nav a { text-decoration: none; color: #1a1a2e; padding: 6px 14px; border-radius: 20px; font-size: 0.85em; background: #f0f0f0; transition: all 0.2s; }
+        nav a:hover { background: #e94560; color: white; }
+        .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 4px 20px; font-size: 0.85em; }
+        .legend span { display: inline-flex; align-items: center; gap: 4px; }
+        .legend .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+        footer { text-align: center; padding: 40px; color: #999; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Arento — Operations Flow Charts</h1>
+    <p>Complete backend flow documentation — states, transitions, notifications, and side effects</p>
+</header>
+
+<nav>
+    <div class="container">
+        <a href="#auth">Authentication</a>
+        <a href="#onboarding">Onboarding</a>
+        <a href="#items">Items</a>
+        <a href="#reservation-create">Create Reservation</a>
+        <a href="#reservation-states">Reservation States</a>
+        <a href="#cart">Cart Checkout</a>
+        <a href="#payment">Payment</a>
+        <a href="#deposit">Deposit</a>
+        <a href="#cancellation">Cancellation</a>
+        <a href="#dispute">Disputes</a>
+        <a href="#payout">Payouts</a>
+        <a href="#review">Reviews</a>
+        <a href="#schedulers">Schedulers</a>
+        <a href="#admin">Admin</a>
+        <a href="#user-status">User Status</a>
+    </div>
+</nav>
+
+<div class="container">
+
+<div class="legend">
+    <span><span class="dot" style="background:#d4edda;border:1px solid #28a745;"></span> Success / Terminal</span>
+    <span><span class="dot" style="background:#fff3cd;border:1px solid #ffc107;"></span> Pending / Waiting</span>
+    <span><span class="dot" style="background:#cce5ff;border:1px solid #007bff;"></span> Active / In Progress</span>
+    <span><span class="dot" style="background:#f8d7da;border:1px solid #dc3545;"></span> Cancelled / Failed</span>
+    <span><span class="dot" style="background:#e2e3e5;border:1px solid #6c757d;"></span> Expired / Inactive</span>
+    <span><span class="dot" style="background:#e8daef;border:1px solid #8e44ad;"></span> Notification sent</span>
+</div>
+
+<!-- 1. AUTHENTICATION -->
+<div class="section" id="auth">
+    <h2>1. Authentication & Registration</h2>
+    <p class="desc">Registration, email verification, login (local + social), and password reset.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([User visits platform]) --> B{Has account?}
+
+        B -->|No| C[POST /register<br/>rate limit: 5/hour/IP]
+        C --> D[Account created<br/>status: ACTIVE<br/>emailVerified: false]
+        D --> N1>Email: SYSTEM_EMAIL_CONFIRMATION<br/>Confirm your email address]
+        N1 --> F{User clicks link?}
+        F -->|Yes| G[GET /auth/verify-email<br/>JWT token, 5min expiry]
+        G --> H[emailVerified: true]
+        F -->|No / expired| I[POST /auth/resend-verification<br/>rate limit: 3/10min]
+        I --> N1
+
+        B -->|Yes, email| J[POST /auth/login<br/>rate limit: 10/min/IP]
+        J --> K{Valid?}
+        K -->|Yes| L[JWT issued, 24h expiry]
+        K -->|No| M[401: Invalid credentials]
+
+        B -->|Yes, social| O[POST /auth/social-login<br/>Auth0 code exchange]
+        O --> P{User in DB?}
+        P -->|Yes| L
+        P -->|No| Q[Auto-create user<br/>passwordHash: null] --> L
+
+        S([Forgot password]) --> T[POST /auth/forgot-password<br/>rate limit: 3/hour/IP]
+        T --> N2>Email: Password reset link<br/>Silent return if email not found]
+        N2 --> V[POST /auth/reset-password] --> W[Password updated]
+
+        style D fill:#fff3cd,stroke:#ffc107
+        style H fill:#d4edda,stroke:#28a745
+        style L fill:#d4edda,stroke:#28a745
+        style M fill:#f8d7da,stroke:#dc3545
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 2. BUSINESS ONBOARDING -->
+<div class="section" id="onboarding">
+    <h2>2. Business Onboarding</h2>
+    <p class="desc">Two-step application with admin review and notifications at each stage.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Business user]) --> B[POST /application/business<br/>Step 1: Company info]
+        B --> C[DRAFT]
+        C --> D[PATCH .../step-two<br/>Step 2: Categories, items]
+        D --> E[PENDING]
+        E --> N1>Email to admin:<br/>ADMIN_NEW_APPLICATION<br/>New application for review]
+
+        N1 --> F{Admin reviews}
+        F -->|Approve| G[APPROVED<br/>BusinessUserEntity created]
+        G --> N2>To owner both channels:<br/>ENTERPRISE_APPLICATION_APPROVED]
+        F -->|Reject| H[REJECTED]
+        H --> N3>To owner both channels:<br/>ENTERPRISE_APPLICATION_REJECTED]
+        F -->|Changes needed| N4>To owner both channels:<br/>ENTERPRISE_APPLICATION_CHANGE_REQUIRED]
+        N4 --> I[Owner fixes] --> D
+        H --> I
+
+        J([Profile change later]) --> K[POST /lender/profile/change-request]
+        K --> L[PENDING]
+        L --> N5>Email to admin:<br/>ADMIN_CORRECTION_REQUEST]
+        N5 --> M{Admin reviews}
+        M -->|Approve| N[Values applied]
+        N --> N6>Email to owner:<br/>LENDER_PROFILE_CORRECTION_APPROVED]
+        M -->|Reject| O[Rejected with notes]
+        O --> N7>Email to owner:<br/>LENDER_PROFILE_CORRECTION_REJECTED]
+
+        style C fill:#e2e3e5,stroke:#6c757d
+        style E fill:#fff3cd,stroke:#ffc107
+        style G fill:#d4edda,stroke:#28a745
+        style H fill:#f8d7da,stroke:#dc3545
+        style L fill:#fff3cd,stroke:#ffc107
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
+        style N4 fill:#e8daef,stroke:#8e44ad
+        style N5 fill:#e8daef,stroke:#8e44ad
+        style N6 fill:#e8daef,stroke:#8e44ad
+        style N7 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 3. ITEM LIFECYCLE -->
+<div class="section" id="items">
+    <h2>3. Item Lifecycle</h2>
+    <p class="desc">Item creation, approval, blocking, and soft deletion.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Owner creates item]) --> B[DRAFT<br/>Images to S3]
+        B --> C[Owner submits] --> D[PENDING]
+        D --> E{Admin reviews}
+        E -->|Approve| F[APPROVED<br/>Publicly visible]
+        F --> N1>To owner both channels:<br/>ENTERPRISE_ITEM_APPROVED]
+        E -->|Reject| G[REJECTED]
+        G --> N2>To owner both channels:<br/>ENTERPRISE_ITEM_REJECTED]
+        N2 --> H[Owner edits] --> D
+
+        F --> I{Admin bans?}
+        I -->|Yes| J[BANNED] -->|Unban| F
+
+        F --> K{Owner deletes?}
+        K -->|Active reservations| L[BLOCKED: cannot delete]
+        K -->|No active| M[DELETED: soft delete]
+
+        O([Owner blocks dates]) --> P[POST /lender/items/id/blocks<br/>quantity + dates]
+        P --> Q{blocked + reserved + new<br/>leq item.quantity?}
+        Q -->|Yes| R[Block created]
+        Q -->|No| S[Rejected: exceeds capacity]
+
+        style B fill:#e2e3e5,stroke:#6c757d
+        style D fill:#cce5ff,stroke:#007bff
+        style F fill:#d4edda,stroke:#28a745
+        style G fill:#f8d7da,stroke:#dc3545
+        style J fill:#f8d7da,stroke:#dc3545
+        style M fill:#e2e3e5,stroke:#6c757d
+        style L fill:#f8d7da,stroke:#dc3545
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 4. RESERVATION CREATION -->
+<div class="section" id="reservation-create">
+    <h2>4. Reservation Creation (Single Item)</h2>
+    <p class="desc">Validation chain, pricing calculation, payment initiation, and notifications.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Renter]) --> B[POST /reservation/preview]
+        B --> C[Validate dates, item APPROVED,<br/>not own item, shop not closed,<br/>lead time, quantity, max days]
+        C --> D[Calculate: pickup time, return time,<br/>paid days, tier pricing x qty,<br/>deposit, fees]
+        D --> E[Check availability:<br/>blocked + reserved + requested leq qty]
+        E --> F[Return preview with pricing]
+
+        F --> G([Renter confirms]) --> H[POST /reservation]
+        H --> I[Validate user: active,<br/>not banned, email verified,<br/>rate limit 5/min/user + 10/min/item]
+        I --> J[Re-run all validations]
+        J --> K[Phase 1 TX: Lock item row<br/>Check availability WITH LOCK<br/>Save reservation PENDING]
+
+        K --> L{Payment method?}
+        L -->|Card| M[Phase 2: Stripe Checkout Session<br/>15min expiry, OUTSIDE TX]
+        M --> N{Stripe OK?}
+        N -->|Yes| O[Save sessionId, create PaymentEntity]
+        N -->|No| P[Reservation stays PENDING<br/>Expiry scheduler cleans up in 60s]
+
+        L -->|Cash| Q[Phase 2: ePay payment code<br/>OUTSIDE TX]
+        Q --> R{ePay OK?}
+        R -->|Yes| S[Save paymentCode, create PaymentEntity]
+        S --> N3>Email to renter:<br/>RENTER_AWAITING_CASH_PAYMENT<br/>Pay at EasyPay terminal]
+        N3 --> N4>To owner both channels:<br/>ENTERPRISE_NEW_RESERVATION<br/>New reservation awaiting payment]
+        R -->|No| T[Throw error]
+
+        style K fill:#fff3cd,stroke:#ffc107
+        style O fill:#d4edda,stroke:#28a745
+        style S fill:#d4edda,stroke:#28a745
+        style P fill:#f8d7da,stroke:#dc3545
+        style N3 fill:#e8daef,stroke:#8e44ad
+        style N4 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">If Stripe/ePay session creation fails, the reservation is NOT rolled back. It stays PENDING and the ReservationExpiryScheduler (every 60s) will expire it when paymentExpiresAt passes.</div>
+</div>
+
+<!-- 5. RESERVATION STATE MACHINE -->
+<div class="section" id="reservation-states">
+    <h2>5. Reservation State Machine</h2>
+    <p class="desc">All states, transitions, side effects, and notifications. Purple nodes = notification sent.</p>
+    <div class="mermaid">
+    flowchart TD
+        PENDING[PENDING<br/>Awaiting payment] -->|Payment timeout<br/>ExpiryScheduler| EXPIRED[EXPIRED]
+        EXPIRED --> NE1>Email to renter: RENTER_RESERVATION_EXPIRED<br/>Both to owner: ENTERPRISE_RESERVATION_EXPIRED]
+        PENDING -->|Renter cancels| CBR0[CANCELLED_BY_RENTER<br/>No refund needed]
+        PENDING -->|Payment webhook succeeds| CONFIRMED[CONFIRMED]
+        CONFIRMED --> NC1>Email to renter: RENTER_RESERVATION_CONFIRMED<br/>Both to owner: ENTERPRISE_RESERVATION_CONFIRMED]
+        NC1 --> NC2[Invoice generated<br/>Lender payout record created<br/>Deposit hold scheduled 48h before pickup]
+
+        CONFIRMED -->|Renter cancels >24h| CBR1[CANCELLED_BY_RENTER<br/>Full refund]
+        CBR1 --> NCR1>Email renter: CANCELLED_BY_RENTER<br/>Both owner: CANCELLED_BY_RENTER]
+        CONFIRMED -->|Renter cancels <24h| CBR2[CANCELLED_BY_RENTER<br/>50% refund + penalty]
+        CBR2 --> NCR1
+        CONFIRMED -->|Owner requests cancel| CR[CANCELLATION_REQUESTED]
+        CR --> NCR2>Email renter: CANCELLATION_REQUESTED<br/>Email admin: ADMIN_CANCELLATION_REQUEST]
+        CR -->|Ops approves| CBOW[CANCELLED_BY_OWNER]
+        CBOW --> NCR3>Email renter: CANCELLED_BY_OWNER<br/>Both owner: CANCELLED_BY_OWNER]
+        CR -->|Ops rejects| CONFIRMED
+        CONFIRMED -->|Admin force-cancel| CBO[CANCELLED_BY_OPS]
+        CBO --> NCR4>Email renter: CANCELLED_BY_OPS<br/>Both owner: CANCELLED_BY_OPS]
+        CONFIRMED -->|No-show 24h past start| CBO
+        CONFIRMED -->|Owner hands over| INUSE[IN_USE]
+
+        INUSE -->|Owner marks returned| COMPLETED[COMPLETED<br/>Deposit released]
+        COMPLETED --> NC3>Both renter: COMPLETED or COMPLETED_WITH_DEPOSIT<br/>Both owner: ENTERPRISE_COMPLETED]
+        INUSE -->|Owner opens dispute| DISPUTE[IN_DISPUTE]
+        DISPUTE --> ND1>Email admin: ADMIN_DISPUTE_OPENED]
+        INUSE -->|Auto-complete 24h past end| COMPLETED
+
+        DISPUTE -->|Admin resolves damage| COMPLETED2[COMPLETED<br/>Partial deposit captured]
+        COMPLETED2 --> ND2>Both renter: RENTER_DISPUTE_RESOLVED<br/>Both owner: LENDER_DISPUTE_RESOLVED]
+        DISPUTE -->|Admin resolves not-returned| CBO2[CANCELLED_BY_OPS<br/>Full deposit + strike]
+        CBO2 --> ND2
+
+        style PENDING fill:#fff3cd,stroke:#ffc107
+        style CONFIRMED fill:#cce5ff,stroke:#007bff
+        style INUSE fill:#d4edda,stroke:#28a745
+        style COMPLETED fill:#d4edda,stroke:#28a745
+        style COMPLETED2 fill:#d4edda,stroke:#28a745
+        style EXPIRED fill:#e2e3e5,stroke:#6c757d
+        style CBR0 fill:#f8d7da,stroke:#dc3545
+        style CBR1 fill:#f8d7da,stroke:#dc3545
+        style CBR2 fill:#f8d7da,stroke:#dc3545
+        style CBO fill:#f8d7da,stroke:#dc3545
+        style CBO2 fill:#f8d7da,stroke:#dc3545
+        style CBOW fill:#f8d7da,stroke:#dc3545
+        style CR fill:#fff3cd,stroke:#ffc107
+        style DISPUTE fill:#fff3cd,stroke:#ffc107
+        style NE1 fill:#e8daef,stroke:#8e44ad
+        style NC1 fill:#e8daef,stroke:#8e44ad
+        style NCR1 fill:#e8daef,stroke:#8e44ad
+        style NCR2 fill:#e8daef,stroke:#8e44ad
+        style NCR3 fill:#e8daef,stroke:#8e44ad
+        style NCR4 fill:#e8daef,stroke:#8e44ad
+        style NC3 fill:#e8daef,stroke:#8e44ad
+        style ND1 fill:#e8daef,stroke:#8e44ad
+        style ND2 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 6. CART CHECKOUT -->
+<div class="section" id="cart">
+    <h2>6. Cart Checkout (Multi-Item)</h2>
+    <p class="desc">Multiple items, single payment, grouped reservations with combined notifications.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Renter adds items]) --> B[POST /cart/itemId/add<br/>Enforces: same owner, dates, location<br/>Upserts quantity if already in cart]
+        B --> C[POST /cart/preview<br/>Combined pricing per item + totals]
+        C --> D[POST /cart/checkout]
+        D --> E[Validate user + cash payment<br/>for ALL items]
+        E --> F[Phase 1 TX: Sort by item ID<br/>For each: lock, check, create reservation<br/>All share checkoutGroupId]
+        F --> G{Payment?}
+        G -->|Card| H[1 Stripe Session, N line items]
+        G -->|Cash| I[1 ePay code for total]
+        H --> J[N PaymentEntity records<br/>all sharing sessionId]
+        I --> J
+        J --> K[Cart items cleared]
+
+        K --> L([Webhook: payment succeeds])
+        L --> M[confirmReservationGroup:<br/>All N reservations CONFIRMED]
+        M --> N1>Email renter: RENTER_RESERVATION_CONFIRMED<br/>Both owner: ENTERPRISE_RESERVATION_CONFIRMED<br/>1 combined notification, not N separate]
+        N1 --> N[1 combined renter invoice<br/>N lender payout records]
+
+        O([Partial cancel: 1 item]) --> P[cancelReservationByRenter<br/>Partial refund from shared PI]
+        P --> N2>Email renter: CANCELLED_BY_RENTER<br/>Both owner: CANCELLED_BY_RENTER<br/>Per cancelled item]
+
+        style F fill:#fff3cd,stroke:#ffc107
+        style M fill:#d4edda,stroke:#28a745
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">If Stripe session creation fails, reservations stay PENDING — expiry scheduler cleans up. Items locked in ascending ID order to prevent deadlocks.</div>
+</div>
+
+<!-- 7. PAYMENT & REFUND -->
+<div class="section" id="payment">
+    <h2>7. Payment & Refund</h2>
+    <p class="desc">Webhook-driven confirmation, expiry with strikes, and refund failure handling.</p>
+    <div class="mermaid">
+    flowchart TD
+        subgraph "Payment Confirmation"
+            A[Stripe webhook:<br/>checkout.session.completed] --> B{Group or single?}
+            B -->|Group| C[confirmReservationGroup]
+            B -->|Single| D[confirmReservation]
+            C --> E[All CONFIRMED + combined invoice]
+            D --> F[CONFIRMED + invoice]
+
+            G[ePay webhook: PAID] --> B
+
+            H[Stripe/ePay: EXPIRED] --> I{Group?}
+            I -->|Group| J[expireReservationGroup]
+            I -->|Single| K[expireReservation]
+            J --> L[All EXPIRED]
+            K --> L
+            L --> M{Cash payment?}
+            M -->|Yes| N[Strike recorded]
+            N --> N1>Email renter: RENTER_RESERVATION_EXPIRED<br/>Both owner: ENTERPRISE_RESERVATION_EXPIRED]
+            M -->|No| N1
+        end
+
+        subgraph "Refund Flow"
+            R([Refund needed]) --> S{Late cancel? <24h}
+            S -->|Yes| T[Partial: 50% of rental cost]
+            S -->|No, grouped| U[Partial: item price from shared PI]
+            S -->|No, single| V[Full refund]
+            T --> W{Stripe succeeds?}
+            U --> W
+            V --> W
+            W -->|Yes| X[PAYMENT_REFUNDED<br/>Credit note + lender invoice voided]
+            W -->|No after 3 retries| Y[REFUND_FAILED]
+            Y --> N2>Email admin: ADMIN_REFUND_FAILED<br/>Manual intervention required]
+            N2 --> Z{Admin action}
+            Z -->|retry-refund| W
+            Z -->|resolve-refund| X
+        end
+
+        style E fill:#d4edda,stroke:#28a745
+        style F fill:#d4edda,stroke:#28a745
+        style L fill:#e2e3e5,stroke:#6c757d
+        style X fill:#d4edda,stroke:#28a745
+        style Y fill:#f8d7da,stroke:#dc3545
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">Cash payment reminder: CashPaymentReminderScheduler (every 5min) sends RENTER_PAYMENT_REMINDER email 4h before expiry. Marks reminderSent=true to prevent duplicates.</div>
+</div>
+
+<!-- 8. DEPOSIT LIFECYCLE -->
+<div class="section" id="deposit">
+    <h2>8. Deposit Hold Lifecycle</h2>
+    <p class="desc">Separate PaymentIntent per reservation. Off-session hold 48h before pickup, with retry and notifications.</p>
+    <div class="mermaid">
+    flowchart TD
+        A[Reservation CONFIRMED<br/>depositHoldStatus: PENDING] --> B[DepositHoldScheduler<br/>runs hourly, checks 48h before pickup]
+        B --> C[Off-session Stripe charge<br/>capture_method: manual]
+        C --> D{Result?}
+        D -->|Success| E[HELD]
+        E --> N1>Email renter: RENTER_DEPOSIT_HELD<br/>Deposit authorized on your card]
+        D -->|Card declined| F[AWAITING_USER]
+        F --> N2>Email renter: RENTER_DEPOSIT_AUTH_REQUIRED<br/>Update your card for deposit]
+        N2 --> G[Checkout session created<br/>for deposit amount]
+
+        G --> H{Renter completes?}
+        H -->|Yes: webhook| I[HELD]
+        I --> N1
+        H -->|No: session expires| J[DepositCleanupScheduler 6h]
+        J --> K{Attempts < 3?}
+        K -->|Yes| L[New checkout session] --> H
+        K -->|No| M[FAILED<br/>Reservation cancelled<br/>Rental refunded]
+
+        E --> O{At return?}
+        O -->|No damage: complete| P[RELEASED]
+        P --> N3>Email renter: RENTER_DEPOSIT_REFUND<br/>Deposit refunded]
+        O -->|Damage: admin captures| Q[CAPTURED<br/>Partial or full charge<br/>Remainder auto-released by Stripe]
+        Q --> N4>Email renter: RENTER_DEPOSIT_CAPTURED<br/>Deposit charged for damage]
+
+        R([Reservation cancelled]) --> S{Deposit state?}
+        S -->|HELD| P
+        S -->|HOLD_ATTEMPTED| T[Cancel PI] --> U[RELEASED]
+        S -->|AWAITING_USER| V[Expire session + cancel PI] --> U
+        S -->|CAPTURE_FAILED| W[Cancel PI] --> U
+        S -->|PENDING / NOT_REQUIRED /<br/> RELEASED / FAILED| X[No action]
+
+        style A fill:#fff3cd,stroke:#ffc107
+        style E fill:#d4edda,stroke:#28a745
+        style I fill:#d4edda,stroke:#28a745
+        style F fill:#fff3cd,stroke:#ffc107
+        style M fill:#f8d7da,stroke:#dc3545
+        style P fill:#d4edda,stroke:#28a745
+        style Q fill:#f8d7da,stroke:#dc3545
+        style U fill:#d4edda,stroke:#28a745
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
+        style N4 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 9. CANCELLATION FLOWS -->
+<div class="section" id="cancellation">
+    <h2>9. Cancellation Flows</h2>
+    <p class="desc">Three cancellation paths with specific notifications for each party.</p>
+    <div class="mermaid">
+    flowchart TD
+        subgraph "Renter Cancellation"
+            A1[Renter cancels] --> B1{Status?}
+            B1 -->|PENDING| C1[Cancel + mark payment failed]
+            C1 --> D1[No refund, no notification]
+            B1 -->|CONFIRMED >24h| E1[Full refund + deposit released]
+            E1 --> N1>Email renter: RENTER_CANCELLED_BY_RENTER<br/>Both owner: ENTERPRISE_CANCELLED_BY_RENTER]
+            B1 -->|CONFIRMED <24h| F1[50% refund<br/>Owner keeps 50% rental<br/>Platform keeps fees]
+            F1 --> N1
+        end
+
+        subgraph "Owner Cancellation via Ops"
+            A2[Owner: request-cancellation] --> B2[CANCELLATION_REQUESTED]
+            B2 --> N2>Email renter: CANCELLATION_REQUESTED<br/>Email admin: ADMIN_CANCELLATION_REQUEST]
+            N2 --> C2{Ops reviews}
+            C2 -->|Approve| D2[CANCELLED_BY_OWNER<br/>Full refund + owner penalty<br/>Deposit released]
+            D2 --> N3>Email renter: CANCELLED_BY_OWNER<br/>Both owner: CANCELLED_BY_OWNER]
+            C2 -->|Reject| E2[Back to CONFIRMED]
+        end
+
+        subgraph "Admin Force-Cancel"
+            A3[Admin cancels] --> B3[CANCELLED_BY_OPS<br/>Full refund + deposit released]
+            B3 --> N4>Email renter: CANCELLED_BY_OPS<br/>Both owner: CANCELLED_BY_OPS]
+        end
+
+        style D1 fill:#e2e3e5,stroke:#6c757d
+        style E1 fill:#d4edda,stroke:#28a745
+        style F1 fill:#fff3cd,stroke:#ffc107
+        style D2 fill:#f8d7da,stroke:#dc3545
+        style E2 fill:#d4edda,stroke:#28a745
+        style B3 fill:#f8d7da,stroke:#dc3545
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
+        style N4 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">All paths use pessimistic locking + state machine. Concurrent cancels are serialized — second attempt is rejected.</div>
+</div>
+
+<!-- 10. DISPUTE -->
+<div class="section" id="dispute">
+    <h2>10. Dispute Resolution</h2>
+    <p class="desc">Owner opens dispute from IN_USE only. Must inspect before completing.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Item returned]) --> B{Owner inspects}
+        B -->|OK| C[Complete: IN_USE to COMPLETED<br/>Deposit released]
+        C --> N1>Both renter: COMPLETED_WITH_DEPOSIT<br/>Both owner: ENTERPRISE_COMPLETED]
+
+        B -->|Damaged| D[POST /lender/disputes<br/>RETURNED_DAMAGED]
+        B -->|Not returned| E[POST /lender/disputes<br/>NOT_RETURNED]
+        D --> F[IN_DISPUTE]
+        E --> F
+        F --> N2>Email admin: ADMIN_DISPUTE_OPENED<br/>New dispute needs attention]
+
+        N2 --> G{Admin reviews}
+        G -->|Damage| H[resolve-damaged<br/>captureAmount: e.g. 30 EUR]
+        H --> I[Stripe captures 30 EUR<br/>Auto-releases 70 EUR]
+        I --> J[COMPLETED]
+        J --> N3>Both renter: RENTER_DISPUTE_RESOLVED<br/>Both owner: LENDER_DISPUTE_RESOLVED]
+
+        G -->|Not returned| K[resolve-not-returned]
+        K --> L[Full deposit captured<br/>Strike against renter]
+        L --> M[CANCELLED_BY_OPS]
+        M --> N3
+
+        style C fill:#d4edda,stroke:#28a745
+        style F fill:#fff3cd,stroke:#ffc107
+        style J fill:#d4edda,stroke:#28a745
+        style M fill:#f8d7da,stroke:#dc3545
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">Disputes from COMPLETED are blocked. Once complete, deposit is released — nothing to capture.</div>
+</div>
+
+<!-- 11. PAYOUT -->
+<div class="section" id="payout">
+    <h2>11. Lender Payout Flow</h2>
+    <p class="desc">Per-reservation records accumulate, business submits invoice, admin pays and notifies.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Payment confirmed]) --> B[LenderInvoiceEntity<br/>gross - 15% commission = net<br/>Status: FINALIZED]
+
+        C([End of month]) --> D[Owner views summary<br/>totalNet, per-reservation breakdown<br/>cancellation penalties deducted]
+        D --> E{Submit invoice}
+        E -->|Generate| F[Platform creates PDF<br/>Issuer: business, Recipient: Arento]
+        E -->|Upload| G[Owner uploads own PDF]
+        F --> H[PDF stored in S3]
+        G --> H
+
+        H --> I([Admin views payouts<br/>Business, IBAN, net amount, PDF])
+        I --> J[Admin transfers via bank]
+        J --> K[POST .../mark-paid]
+        K --> L{Already paid?}
+        L -->|Yes| M[Idempotent return]
+        L -->|No| N[All FINALIZED to PAID<br/>paidAt + paidBy recorded]
+        N --> N1>To owner both channels:<br/>LENDER_PAYOUT_COMPLETED<br/>Your payout has been processed]
+
+        style B fill:#cce5ff,stroke:#007bff
+        style H fill:#fff3cd,stroke:#ffc107
+        style N fill:#d4edda,stroke:#28a745
+        style N1 fill:#e8daef,stroke:#8e44ad
+    </div>
+    <div class="note">Admin cannot mark paid unless business has submitted invoice PDF. Mutual exclusion: generate OR upload per month, not both.</div>
+</div>
+
+<!-- 12. REVIEWS -->
+<div class="section" id="review">
+    <h2>12. Review System</h2>
+    <p class="desc">Eligibility-gated, one per item/user, with admin moderation.</p>
+    <div class="mermaid">
+    flowchart TD
+        A([Rental COMPLETED]) --> B{Reviewer}
+        B -->|Renter| C[POST /reviews/item/itemId<br/>or POST /reviews/user/ownerId]
+        B -->|Owner| D[POST /reviews/user/renterId]
+        C --> E{Checks}
+        D --> E
+        E -->|No COMPLETED reservation| F[400: Must have completed rental]
+        E -->|Already reviewed| G[400: Already reviewed]
+        E -->|Self-review| H[400: Cannot review self]
+        E -->|OK| I[Review created<br/>Rating updated incrementally]
+
+        J([Admin moderation]) --> K{Action}
+        K -->|Hide| L[hidden=true, reason recorded]
+        K -->|Unhide| M[hidden=false]
+        K -->|Delete| N[Permanent removal]
+
+        style F fill:#f8d7da,stroke:#dc3545
+        style G fill:#f8d7da,stroke:#dc3545
+        style H fill:#f8d7da,stroke:#dc3545
+        style I fill:#d4edda,stroke:#28a745
+        style L fill:#fff3cd,stroke:#ffc107
+    </div>
+</div>
+
+<!-- 13. SCHEDULERS -->
+<div class="section" id="schedulers">
+    <h2>13. Background Schedulers</h2>
+    <p class="desc">5 automated jobs with Redis distributed locks. Notifications shown inline.</p>
+    <div class="mermaid">
+    flowchart TD
+        subgraph "ReservationExpiryScheduler — every 60s"
+            A[Find PENDING past paymentExpiresAt] --> B[Phase 1 TX: Lock, read PI ID]
+            B --> C[Phase 2 NO TX: Check Stripe]
+            C --> D{Payment succeeded?}
+            D -->|Yes: late webhook| E[Phase 3 TX: CONFIRMED]
+            D -->|No| F[Phase 3 TX: EXPIRED]
+            F --> G{Cash?}
+            G -->|Yes| H[Strike + invalidate ePay]
+            H --> N1>Renter: EXPIRED<br/>Owner: EXPIRED]
+            G -->|No| N1
+        end
+
+        subgraph "DepositHoldScheduler — every 1h"
+            I[Find CONFIRMED, pickup in 48h] --> J[Off-session Stripe hold]
+            J -->|Success| K[HELD]
+            K --> N2>Renter: DEPOSIT_HELD]
+            J -->|Declined| L[AWAITING_USER + checkout session]
+            L --> N3>Renter: DEPOSIT_AUTH_REQUIRED]
+        end
+
+        subgraph "DepositCleanupScheduler — every 6h"
+            M[HOLD_ATTEMPTED > 24h] --> O[Create checkout session]
+            P[AWAITING_USER expired] --> Q{Retries < 3?}
+            Q -->|Yes| R[New session]
+            Q -->|No| S[FAILED: cancel + refund]
+        end
+
+        subgraph "AutoCompletionScheduler — every 1h"
+            T[CONFIRMED 24h past start] --> U[No-show: CANCELLED_BY_OPS + 50% refund]
+            V[IN_USE 24h past end] --> W[Auto-complete + release deposit]
+            X[COMPLETED with HELD deposit] --> Y[Retry release]
+        end
+
+        subgraph "CashReminderScheduler — every 5min"
+            Z[PENDING + CASH, expiry in 4h] --> N4>Renter: RENTER_PAYMENT_REMINDER<br/>reminderSent = true]
+        end
+
+        style E fill:#d4edda,stroke:#28a745
+        style F fill:#e2e3e5,stroke:#6c757d
+        style K fill:#d4edda,stroke:#28a745
+        style S fill:#f8d7da,stroke:#dc3545
+        style U fill:#f8d7da,stroke:#dc3545
+        style W fill:#d4edda,stroke:#28a745
+        style N1 fill:#e8daef,stroke:#8e44ad
+        style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
+        style N4 fill:#e8daef,stroke:#8e44ad
+    </div>
+</div>
+
+<!-- 14. ADMIN -->
+<div class="section" id="admin">
+    <h2>14. Admin Operations</h2>
+    <p class="desc">All admin capabilities. Every endpoint requires ROLE_ADMIN.</p>
+    <div class="mermaid">
+    flowchart TD
+        DASH[Dashboard<br/>Cached 2min Redis] --> METRICS[Users, items, reservations<br/>pending actions, GMV 30d]
+
+        subgraph "User Management"
+            U1[Search] --> U2[Ban/Unban/Restrict/Unrestrict]
+            U2 --> U3[Reset password, Notes]
+        end
+
+        subgraph "Item Management"
+            I1[Search pending] --> I2[Approve/Reject/Ban/Unban]
+        end
+
+        subgraph "Reservations & Payments"
+            R1[Search reservations] --> R2[Force-cancel]
+            P1[Search payments] --> P2[Refund / Retry / Resolve]
+        end
+
+        subgraph "Cancellations & Disputes"
+            C1[Search requests] --> C2[Resolve/Reject individual + group]
+            D1[Resolve damage] --> D2[Resolve not-returned]
+        end
+
+        subgraph "Deposits"
+            E1[Status] --> E2[Capture/Release/Retry]
+        end
+
+        subgraph "Content & Config"
+            F1[Fees CRUD + cache reload] --> F2[Categories CRUD]
+            F2 --> F3[Review moderation]
+            F3 --> F4[Profile changes: approve/reject]
+            F4 --> F5[Broadcast notifications]
+            F5 --> F6[Audit log search]
+        end
+
+        subgraph "Payouts"
+            PO1[View pending by month] --> PO2[Mark paid after bank transfer]
+        end
+    </div>
+</div>
+
+<!-- 15. USER STATUS -->
+<div class="section" id="user-status">
+    <h2>15. User Status & Punishment</h2>
+    <p class="desc">Strike-based auto-ban with manual admin overrides.</p>
+    <div class="mermaid">
+    flowchart TD
+        A[ACTIVE] -->|Admin restricts| B[RESTRICTED]
+        B -->|Admin unrestricts| A
+        A -->|Admin bans| C[BANNED]
+        C -->|Admin unbans| A
+
+        D([Cash reservation expires]) --> E[Strike recorded]
+        E --> F{2+ strikes in 7 days?}
+        F -->|Yes| G[AUTO-BAN 168h]
+        G --> C
+        F -->|No| H[Warning only]
+        C -->|168h passes| A
+
+        I([Banned user tries]) --> J[Create reservation / Checkout / Review]
+        J --> K[400: Account not active]
+
+        style A fill:#d4edda,stroke:#28a745
+        style B fill:#fff3cd,stroke:#ffc107
+        style C fill:#f8d7da,stroke:#dc3545
+        style G fill:#f8d7da,stroke:#dc3545
+        style K fill:#f8d7da,stroke:#dc3545
+    </div>
+</div>
+
+</div>
+
+<footer>
+    Arento Platform — Backend Operations Documentation<br/>
+    Generated June 2026
+</footer>
+
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        flowchart: {
+            useMaxWidth: true,
+            htmlLabels: true,
+            curve: 'basis',
+            padding: 15,
+            nodeSpacing: 30,
+            rankSpacing: 50
+        },
+        themeVariables: {
+            fontSize: '13px',
+            fontFamily: 'Segoe UI, system-ui, sans-serif'
+        }
+    });
+</script>
+
+</body>
+</html>
