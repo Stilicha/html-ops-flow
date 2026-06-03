@@ -158,12 +158,17 @@
     flowchart TD
         A([Owner creates item]) --> B[DRAFT<br/>Images to S3]
         B --> C[Owner submits] --> D[PENDING]
-        D --> E{Admin reviews}
+        D --> N3>Email to admin:<br/>ADMIN_NEW_ITEM_FOR_APPROVAL]
+        N3 --> E{Admin reviews}
         E -->|Approve| F[APPROVED<br/>Publicly visible]
-        F --> N1>To owner both channels:<br/>ENTERPRISE_ITEM_APPROVED]
+        F --> N1>To owner both channels:<br/>ENTERPRISE_ITEM_APPROVED<br/>or LENDER_ITEM_APPROVED]
         E -->|Reject| G[REJECTED]
-        G --> N2>To owner both channels:<br/>ENTERPRISE_ITEM_REJECTED]
+        G --> N2>To owner both channels:<br/>ENTERPRISE_ITEM_REJECTED<br/>or LENDER_ITEM_REJECTED]
         N2 --> H[Owner edits] --> D
+
+        F --> FA([Owner edits approved item])
+        FA --> FB[Back to PENDING<br/>Item goes offline]
+        FB --> N3
 
         F --> I{Admin bans?}
         I -->|Yes| J[BANNED] -->|Unban| F
@@ -186,6 +191,7 @@
         style L fill:#f8d7da,stroke:#dc3545
         style N1 fill:#e8daef,stroke:#8e44ad
         style N2 fill:#e8daef,stroke:#8e44ad
+        style N3 fill:#e8daef,stroke:#8e44ad
     </div>
 </div>
 
@@ -559,6 +565,7 @@
         E -->|Already reviewed| G[400: Already reviewed]
         E -->|Self-review| H[400: Cannot review self]
         E -->|OK| I[Review created<br/>Rating updated incrementally]
+        I --> NR>To item owner both channels:<br/>LENDER_NEW_REVIEW<br/>renterName, rating, itemName]
 
         J([Admin moderation]) --> K{Action}
         K -->|Hide| L[hidden=true, reason recorded]
@@ -570,6 +577,7 @@
         style H fill:#f8d7da,stroke:#dc3545
         style I fill:#d4edda,stroke:#28a745
         style L fill:#fff3cd,stroke:#ffc107
+        style NR fill:#e8daef,stroke:#8e44ad
     </div>
 </div>
 
@@ -658,6 +666,16 @@
 
         subgraph "Deposits"
             E1[Status] --> E2[Capture/Release/Retry]
+        end
+
+        subgraph "Admin Alerts Received"
+            AL1>ADMIN_NEW_APPLICATION]
+            AL2>ADMIN_NEW_ITEM_FOR_APPROVAL]
+            AL3>ADMIN_CANCELLATION_REQUEST]
+            AL4>ADMIN_DISPUTE_OPENED]
+            AL5>ADMIN_REFUND_FAILED]
+            AL6>ADMIN_LISTING_REPORTED]
+            AL7>ADMIN_CORRECTION_REQUEST]
         end
 
         subgraph "Content & Config"
