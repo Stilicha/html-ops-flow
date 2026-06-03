@@ -521,33 +521,33 @@
 
 <!-- 11. PAYOUT -->
 <div class="section" id="payout">
-    <h2>11. Lender Payout Cycle Flow</h2>
-    <p class="desc">Per-reservation records accumulate; each 14-day payout cycle the business submits a partner invoice / payout document for that cycle, admin pays and notifies.</p>
+    <h2>11. Lender Payout Flow</h2>
+    <p class="desc">Per-reservation records accumulate, business submits invoice, admin pays and notifies.</p>
     <div class="mermaid">
     flowchart TD
         A([Payment confirmed]) --> B[LenderInvoiceEntity<br/>gross - 15% commission = net<br/>Status: FINALIZED]
 
-        C([Payout cycle closes<br/>cycle A: days 1-14<br/>cycle B: day 15 to end-of-month]) --> D[Owner views twice-monthly payout summary<br/>totalNet for the cycle, per-reservation breakdown<br/>cancellation penalties deducted]
-        D --> E{Submit partner invoice / payout document<br/>for the relevant payout cycle}
+        C([End of month]) --> D[Owner views summary<br/>totalNet, per-reservation breakdown<br/>cancellation penalties deducted]
+        D --> E{Submit invoice}
         E -->|Generate| F[Platform creates PDF<br/>Issuer: business, Recipient: Arento]
         E -->|Upload| G[Owner uploads own PDF]
-        F --> H[PDF stored in S3<br/>persisted as LenderPayoutCycleInvoiceEntity]
+        F --> H[PDF stored in S3]
         G --> H
 
-        H --> I([Admin views cycle payouts<br/>Business, IBAN, net amount, PDF])
+        H --> I([Admin views payouts<br/>Business, IBAN, net amount, PDF])
         I --> J[Admin transfers via bank]
-        J --> K[POST .../mark-paid?cycleCode=YYYY-MM-A]
+        J --> K[POST .../mark-paid]
         K --> L{Already paid?}
         L -->|Yes| M[Idempotent return]
-        L -->|No| N[All FINALIZED in cycle to PAID<br/>paidAt + paidBy recorded]
-        N --> N1>To owner both channels:<br/>LENDER_PAYOUT_COMPLETED<br/>Your payout for this cycle has been processed]
+        L -->|No| N[All FINALIZED to PAID<br/>paidAt + paidBy recorded]
+        N --> N1>To owner both channels:<br/>LENDER_PAYOUT_COMPLETED<br/>Your payout has been processed]
 
         style B fill:#cce5ff,stroke:#007bff
         style H fill:#fff3cd,stroke:#ffc107
         style N fill:#d4edda,stroke:#28a745
         style N1 fill:#e8daef,stroke:#8e44ad
     </div>
-    <div class="note">Admin cannot mark paid unless the business has submitted the partner invoice / payout document for the cycle. Mutual exclusion: generate OR upload per payout cycle, not both. <code>LenderPayoutCycleInvoiceEntity</code> is the persisted shape today; the flow is structured so additional payout-document types can plug in alongside it.</div>
+    <div class="note">Admin cannot mark paid unless business has submitted invoice PDF. Mutual exclusion: generate OR upload per month, not both.</div>
 </div>
 
 <!-- 12. REVIEWS -->
@@ -687,7 +687,7 @@
         end
 
         subgraph "Payouts"
-            PO1[View pending by payout cycle] --> PO2[Mark paid after bank transfer]
+            PO1[View pending by month] --> PO2[Mark paid after bank transfer]
         end
     </div>
 </div>
