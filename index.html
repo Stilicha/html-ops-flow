@@ -359,8 +359,8 @@
             M -->|No| N1
         end
 
-        subgraph "Refund Flow"
-            R([Refund needed]) --> S{Late cancel? <24h}
+        subgraph "Card Refund Flow (Stripe — automatic)"
+            R([Refund needed<br/>Card payment]) --> S{Late cancel? <24h}
             S -->|Yes| T[Partial: 50% of rental cost]
             S -->|No, grouped| U[Partial: item price from shared PI]
             S -->|No, single| V[Full refund]
@@ -375,15 +375,32 @@
             Z -->|resolve-refund| X
         end
 
+        subgraph "Cash Refund Flow (EasyPay — manual approval)"
+            CR1([Refund needed<br/>Cash payment]) --> CR2[Reservation cancelled<br/>Status: CASH_REFUND_PENDING<br/>Lender invoice voided]
+            CR2 --> CR3[Renter goes to EasyPay terminal<br/>Requests refund at counter]
+            CR3 --> CR4[EasyPay sends email to Arento<br/>Asking for refund approval]
+            CR4 --> CR5>Admin receives EasyPay email<br/>Reviews in admin panel]
+            CR5 --> CR6{Admin approves?}
+            CR6 -->|Yes| CR7[Admin confirms refund<br/>in admin panel]
+            CR7 --> CR8[EasyPay processes refund<br/>Returns money to renter]
+            CR8 --> CR9[PAYMENT_REFUNDED<br/>Admin marks resolved in system]
+            CR6 -->|No — dispute or fraud| CR10[Admin rejects<br/>Notifies renter]
+        end
+
         style E fill:#d4edda,stroke:#28a745
         style F fill:#d4edda,stroke:#28a745
         style L fill:#e2e3e5,stroke:#6c757d
         style X fill:#d4edda,stroke:#28a745
         style Y fill:#f8d7da,stroke:#dc3545
+        style CR2 fill:#fff3cd,stroke:#ffc107
+        style CR5 fill:#e8daef,stroke:#8e44ad
+        style CR9 fill:#d4edda,stroke:#28a745
+        style CR10 fill:#f8d7da,stroke:#dc3545
         style N1 fill:#e8daef,stroke:#8e44ad
         style N2 fill:#e8daef,stroke:#8e44ad
     </div>
     <div class="note">Cash payment reminder: CashPaymentReminderScheduler (every 5min) sends RENTER_PAYMENT_REMINDER email 4h before expiry. Marks reminderSent=true to prevent duplicates.</div>
+    <div class="note">Cash refunds cannot be automated — EasyPay requires email-based approval from Arento before processing the refund. The admin panel tracks which cash cancellations are pending EasyPay refund resolution.</div>
 </div>
 
 <!-- 8. DEPOSIT LIFECYCLE -->
@@ -447,10 +464,14 @@
             A1[Renter cancels] --> B1{Status?}
             B1 -->|PENDING| C1[Cancel + mark payment failed]
             C1 --> D1[No refund, no notification]
-            B1 -->|CONFIRMED >24h| E1[Full refund + deposit released]
-            E1 --> N1>Email renter: RENTER_CANCELLED_BY_RENTER<br/>Both owner: ENTERPRISE_CANCELLED_BY_RENTER]
-            B1 -->|CONFIRMED <24h| F1[50% refund<br/>Owner keeps 50% rental<br/>Platform keeps fees]
-            F1 --> N1
+            B1 -->|CONFIRMED| E1{Payment method?}
+            E1 -->|Card| E1A{Late cancel? <24h}
+            E1A -->|No| E1B[Full Stripe refund<br/>+ deposit released]
+            E1A -->|Yes| E1C[50% Stripe refund<br/>Owner keeps 50% + fees]
+            E1 -->|Cash| E1D[CASH_REFUND_PENDING<br/>Renter must request refund<br/>at EasyPay terminal<br/>Admin approves via email]
+            E1B --> N1>Email renter: CANCELLED_BY_RENTER<br/>Both owner: CANCELLED_BY_RENTER]
+            E1C --> N1
+            E1D --> N1
         end
 
         subgraph "Owner Cancellation via Ops"
@@ -468,8 +489,9 @@
         end
 
         style D1 fill:#e2e3e5,stroke:#6c757d
-        style E1 fill:#d4edda,stroke:#28a745
-        style F1 fill:#fff3cd,stroke:#ffc107
+        style E1B fill:#d4edda,stroke:#28a745
+        style E1C fill:#fff3cd,stroke:#ffc107
+        style E1D fill:#fff3cd,stroke:#ffc107
         style D2 fill:#f8d7da,stroke:#dc3545
         style E2 fill:#d4edda,stroke:#28a745
         style B3 fill:#f8d7da,stroke:#dc3545
